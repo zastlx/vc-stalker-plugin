@@ -1,4 +1,6 @@
 # vc-stalker-plugin
+## Is this done?
+No all the features are completed yet.
 ## What is this?
 This is a custom plugin for Vencord that allows you to stalk users, it is very useful to tell if someone is ignoring you or see if they are talking to someone else.
 ## Why?
