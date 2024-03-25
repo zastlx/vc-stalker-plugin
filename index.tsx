@@ -1,12 +1,12 @@
 import { addContextMenuPatch, NavContextMenuPatchCallback, removeContextMenuPatch } from "@api/ContextMenu";
 import { definePluginSettings } from "@api/Settings";
 import definePlugin, { OptionType, PluginDef } from "@utils/types";
-import { Menu, Toasts, UserStore, MessageStore } from "@webpack/common";
+import { Menu, Toasts, UserStore, MessageStore, RestAPI, ChannelStore } from "@webpack/common";
 import { findByProps } from "@webpack";
-import { getCurrentChannel } from "@utils/discord";
+import { getCurrentChannel, openUserProfile } from "@utils/discord";
 import { Notifications } from "@api/index";
 import { Message } from "discord-types/general";
-import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload } from "./types";
+import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload, UserUpdatePayload, ThreadCreatePayload } from "./types";
 import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist } from "./utils";
 import { loggedMessages } from "userplugins/vc-message-logger-enhanced/LoggedMessageManager";
 const settings = definePluginSettings({
@@ -17,14 +17,18 @@ const settings = definePluginSettings({
     },
 });
 
-const switchToMsg = (cid: string, gid: string, mid: string) => {
-    findByProps("transitionToGuildSync").transitionToGuildSync("1015037282551615518");
-    findByProps("selectChannel").selectChannel({
+const switchToMsg = (gid: string, cid?: string, mid?: string) => {
+    findByProps("transitionToGuildSync").transitionToGuildSync(gid);
+    if (cid) findByProps("selectChannel").selectChannel({
         guildId: gid,
         channelId: cid,
         messageId: mid
     });
 };
+
+let oldUsers: {
+    [id: string]: UserUpdatePayload;
+} = {};
 
 const _plugin: PluginDef & Record<string, any> = {
     name: "Stalker",
@@ -44,11 +48,20 @@ const _plugin: PluginDef & Record<string, any> = {
             const authorId = payload.message.author.id;
             if (!isInWhitelist(authorId) || getCurrentChannel().id === payload.channelId) return;
             const author = UserStore.getUser(authorId);
-
+            
+            if (payload.message.type === 7) {
+                Notifications.showNotification({
+                    title: `${author.globalName || author.username} Joined a server`,
+                    body: "Click to jump to the message.",
+                    onClick: () => switchToMsg(payload.guildId, payload.channelId, payload.message.id),
+                    icon: author.getAvatarURL(undefined, undefined, false)
+                });
+                return;
+            }
             Notifications.showNotification({
                 title: `${author.globalName || author.username} Sent a message`,
                 body: "Click to jump to the message",
-                onClick: () => switchToMsg(payload.channelId, payload.guildId, payload.message.id),
+                onClick: () => switchToMsg(payload.guildId, payload.channelId, payload.message.id),
                 icon: author.getAvatarURL(undefined, undefined, false)
             });
         },
@@ -62,7 +75,7 @@ const _plugin: PluginDef & Record<string, any> = {
             Notifications.showNotification({
                 title: `${author.globalName || author.username} Edited a message`,
                 body: "Click to jump to the message",
-                onClick: () => switchToMsg(payload.message.channel_id, payload.guildId, payload.message.id),
+                onClick: () => switchToMsg(payload.guildId, payload.message.channel_id, payload.message.id),
                 icon: author.getAvatarURL(undefined, undefined, false)
             });
         },
@@ -93,27 +106,54 @@ const _plugin: PluginDef & Record<string, any> = {
 
             const author = UserStore.getUser(payload.userId);
             if (!isInWhitelist(author.id) || getCurrentChannel().id === payload.channelId) return;
-            
+
             Notifications.showNotification({
                 title: `${author.globalName || author.username} Started typing...`,
                 body: "Click to jump to the channel.",
                 icon: author.getAvatarURL(undefined, undefined, false),
-                onClick: () => switchToMsg(payload.channelId, getCurrentChannel().guild_id, "")
+                onClick: () => switchToMsg(ChannelStore.getChannel(payload.channelId).guild_id, payload.channelId, "")
             });
 
+        },
+        USER_PROFILE_FETCH_SUCCESS: async (payload: UserUpdatePayload) => {
+            if (!payload || !payload.user || !payload.user.id || !isInWhitelist(payload.user.id)) return;
+
+            const oldUser = oldUsers[payload.user.id];
+            if (!oldUser) {
+                oldUsers[payload.user.id] = payload;
+                return;
+            }
+
+            // TODO: list the differences between the old and new user
+            if (payload != oldUser) {
+                Notifications.showNotification({
+                    title: `${payload.user.globalName || payload.user.username} updated their profile!`,
+                    body: "Click to view their profile.",
+                    onClick: () => {
+                        openUserProfile(payload.user.id);
+                    },
+                    icon: UserStore.getUser(payload.user.id).getAvatarURL(undefined, undefined, false)
+                });
+                oldUsers[payload.user.id] = payload;
+            }
+
+        },
+        THREAD_CREATE: (payload: ThreadCreatePayload) => {
+            if (!payload || !payload.channel || !payload.channel.id || !payload.channel.ownerId || !isInWhitelist(payload.channel.ownerId)) return;
+
+            if (payload.isNewlyCreated) {
+                Notifications.showNotification({
+                    title: `New thread created by ${UserStore.getUser(payload.channel.ownerId).globalName || UserStore.getUser(payload.channel.ownerId).username}`,
+                    body: `Click to view the thread.`,
+                    onClick: () => switchToMsg(payload.channel.guild_id, payload.channel.parent_id, ""),
+                    icon: UserStore.getUser(payload.channel.ownerId).getAvatarURL(undefined, undefined, false)
+                });
+            }
         },/*
-        USER_UPDATE: payload => {
-            // Handle USER_UPDATE event
-            console.log("USER_UPDATE event received:", payload);
-        },
-        THREAD_CREATE: payload => {
-            // Handle THREAD_CREATE event
-            console.log("THREAD_CREATE event received:", payload);
-        },
         PRESENCE_UPDATES: payload => {
             // Handle PRESENCE_UPDATES event
             console.log("PRESENCE_UPDATES event received:", payload);
-        },
+        },/*
         GUILD_MEMBER_ADD: payload => {
             // Handle GUILD_MEMBER_ADD event
             console.log("GUILD_MEMBER_ADD event received:", payload);
@@ -125,23 +165,28 @@ const _plugin: PluginDef & Record<string, any> = {
         RELATIONSHIP_UPDATE: payload => {
             // Handle RELATIONSHIP_UPDATE event
             console.log("RELATIONSHIP_UPDATE event received:", payload);
-        },
-        RELATIONSHIP_ADD: payload => {
-            // Handle RELATIONSHIP_ADD event
-            console.log("RELATIONSHIP_ADD event received:", payload);
-        },
-        RELATIONSHIP_REMOVE: payload => {
-            // Handle RELATIONSHIP_REMOVE event
-            console.log("RELATIONSHIP_REMOVE event received:", payload);
         },*/
     },
-    start() {
+    async start() {
         if (!Vencord.Plugins.plugins["MessageLoggerEnhanced"]) {
             Notifications.showNotification({
                 title: "Stalker plugin requires MessageLoggerEnhanced to be enabled",
                 body: "Click to download it.",
                 onClick: () => open("https://github.com/Syncxv/vc-message-logger-enhanced/")
             });
+        }
+        for (const id of settings.store.whitelistedIds.split(",")) {
+            // is .getUser not a async function?
+            const { body } = await RestAPI.get({
+                url: `/users/${id}/profile`,
+                query: {
+                    with_mutual_guilds: true,
+                    with_mutual_friends_count: true,
+                }
+            });
+            oldUsers[id] = body;
+            console.log(body);
+            logger.info(`Cached user ${id} with name ${oldUsers[id].user.globalName || oldUsers[id].user.username} for further usage.`);
         }
         addContextMenuPatch("user-context", contextMenuPatch);
     },
