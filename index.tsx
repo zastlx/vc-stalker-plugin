@@ -48,7 +48,7 @@ const _plugin: PluginDef & Record<string, any> = {
             const authorId = payload.message.author.id;
             if (!isInWhitelist(authorId) || getCurrentChannel().id === payload.channelId) return;
             const author = UserStore.getUser(authorId);
-            
+
             if (payload.message.type === 7) {
                 Notifications.showNotification({
                     title: `${author.globalName || author.username} Joined a server`,
