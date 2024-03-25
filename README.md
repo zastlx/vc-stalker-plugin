@@ -1,7 +1,7 @@
 # vc-stalker-plugin
 ## Is this done?
 
-No, not all the features are completed yet.
+No, not all the features are completed yet, but it is currently in a usable state.
 
 ## What is this?
 
