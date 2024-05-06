@@ -8,7 +8,24 @@ import { Notifications } from "@api/index";
 import { Message } from "discord-types/general";
 import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload, UserUpdatePayload, ThreadCreatePayload } from "./types";
 import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist } from "./utils";
-import { loggedMessages } from "userplugins/vc-message-logger-enhanced/LoggedMessageManager";
+
+async function importLoggedMessages() {
+    let module;
+    try {
+        // @ts-ignore
+        module = await import("plugins/vc-message-logger-enhanced/LoggedMessageManager");
+    } catch {
+        try {
+            // @ts-ignore
+            module = await import("userplugins/vc-message-logger-enhanced/LoggedMessageManager");
+        } catch {
+            console.error("Failed to load loggedMessages from both 'plugins' and 'userplugins' directories.");
+        }
+    }
+    return module ? module.loggedMessages : null;
+}
+
+
 const settings = definePluginSettings({
     whitelistedIds: {
         default: "",
@@ -18,9 +35,9 @@ const settings = definePluginSettings({
 });
 
 const switchToMsg = (gid: string, cid?: string, mid?: string) => {
-    findByProps("transitionToGuildSync").transitionToGuildSync(gid);
+    if (gid) findByProps("transitionToGuildSync").transitionToGuildSync(gid);
     if (cid) findByProps("selectChannel").selectChannel({
-        guildId: gid,
+        guildId: gid ?? "@me",
         channelId: cid,
         messageId: mid
     });
@@ -29,6 +46,7 @@ const switchToMsg = (gid: string, cid?: string, mid?: string) => {
 let oldUsers: {
     [id: string]: UserUpdatePayload;
 } = {};
+let loggedMessages: Record<string, Message> = {};
 
 const _plugin: PluginDef & Record<string, any> = {
     name: "Stalker",
@@ -45,12 +63,13 @@ const _plugin: PluginDef & Record<string, any> = {
         MESSAGE_CREATE: (payload: MessageCreatePayload) => {
             if (!payload.message || !payload.message.author || !payload.message.channel_id) return;
 
-            const authorId = payload.message.author.id;
-            if (!isInWhitelist(authorId) || getCurrentChannel().id === payload.channelId) return;
+            const authorId = payload.message.author?.id;
+            if (!isInWhitelist(authorId) || getCurrentChannel()?.id === payload.channelId) return;
             const author = UserStore.getUser(authorId);
 
             if (payload.message.type === 7) {
                 Notifications.showNotification({
+                    // @ts-ignore outdated types lib doesnt have .globalName
                     title: `${author.globalName || author.username} Joined a server`,
                     body: "Click to jump to the message.",
                     onClick: () => switchToMsg(payload.guildId, payload.channelId, payload.message.id),
@@ -59,6 +78,8 @@ const _plugin: PluginDef & Record<string, any> = {
                 return;
             }
             Notifications.showNotification({
+                // @ts-ignore outdated types lib doesnt have .globalName
+                // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Sent a message`,
                 body: "Click to jump to the message",
                 onClick: () => switchToMsg(payload.guildId, payload.channelId, payload.message.id),
@@ -68,27 +89,34 @@ const _plugin: PluginDef & Record<string, any> = {
         MESSAGE_UPDATE: (payload: MessageUpdatePayload) => {
             if (!payload.message || !payload.message.author || !payload.message.channel_id) return;
 
-            const authorId = payload.message.author.id;
-            if (!isInWhitelist(authorId) || getCurrentChannel().id === payload.message.channel_id) return;
+            const authorId = payload.message.author?.id;
+            if (!isInWhitelist(authorId) || getCurrentChannel()?.id === payload.message.channel_id) return;
             const author = UserStore.getUser(authorId);
 
             Notifications.showNotification({
+                // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Edited a message`,
                 body: "Click to jump to the message",
                 onClick: () => switchToMsg(payload.guildId, payload.message.channel_id, payload.message.id),
                 icon: author.getAvatarURL(undefined, undefined, false)
             });
         },
-        MESSAGE_DELETE: (payload: MessageDeletePayload) => {
+        MESSAGE_DELETE: async (payload: MessageDeletePayload) => {
             if (!payload || !payload?.channelId || !payload?.id || !payload?.guildId) return;
-
-            const message: Message | null = MessageStore.getMessage(payload.channelId, payload.id) ?? loggedMessages[payload.id];
+            let message: Message | null;
+            if (loggedMessages[payload.id]) {
+                message = MessageStore.getMessage(payload.channelId, payload.id) ?? loggedMessages[payload.id];
+            } else {
+                loggedMessages = await importLoggedMessages();
+                message = MessageStore.getMessage(payload.channelId, payload.id) ?? loggedMessages[payload.id];
+            }
             if (!message) return logger.error("Received a MESSAGE_DELETE event but the message was not found in the MessageStore, try enabling \"Cache Messages From Servers\" setting in MessageLoggerEnhanced.");
 
             const { author } = message;
-            if (!isInWhitelist(author.id) || getCurrentChannel().id === message.channel_id) return;
+            if (!isInWhitelist(author?.id) || getCurrentChannel()?.id === message.channel_id) return;
 
             Notifications.showNotification({
+                // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Deleted a message!`,
                 body: `"${message.content.length > 100 ? message.content.substring(0, 100).concat("...") : message.content}"`,
                 onClick: () => {
@@ -105,9 +133,10 @@ const _plugin: PluginDef & Record<string, any> = {
             if (!payload || !payload.channelId || !payload.userId) return;
 
             const author = UserStore.getUser(payload.userId);
-            if (!isInWhitelist(author.id) || getCurrentChannel().id === payload.channelId) return;
+            if (!isInWhitelist(author?.id) || getCurrentChannel()?.id === payload.channelId) return;
 
             Notifications.showNotification({
+                // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Started typing...`,
                 body: "Click to jump to the channel.",
                 icon: author.getAvatarURL(undefined, undefined, false),
@@ -143,6 +172,7 @@ const _plugin: PluginDef & Record<string, any> = {
 
             if (payload.isNewlyCreated) {
                 Notifications.showNotification({
+                    // @ts-ignore outdated types lib doesnt have .globalName
                     title: `New thread created by ${UserStore.getUser(payload.channel.ownerId).globalName || UserStore.getUser(payload.channel.ownerId).username}`,
                     body: `Click to view the thread.`,
                     onClick: () => switchToMsg(payload.channel.guild_id, payload.channel.parent_id, ""),
@@ -185,29 +215,42 @@ const _plugin: PluginDef & Record<string, any> = {
                 }
             });
             oldUsers[id] = body;
-            console.log(body);
             logger.info(`Cached user ${id} with name ${oldUsers[id].user.globalName || oldUsers[id].user.username} for further usage.`);
         }
         addContextMenuPatch("user-context", contextMenuPatch);
+
+        this.loggedMessages = await importLoggedMessages();
     },
     stop() {
         removeContextMenuPatch("user-context", contextMenuPatch);
     },
-    stalkUser(id: string) {
+    async stalkUser(id: string) {
         Toasts.show({
             type: Toasts.Type.SUCCESS,
-            message: `Stalking ${UserStore.getUser(id).globalName}`,
+            // @ts-ignore outdated types lib doesnt have .globalName
+            message: `Stalking ${UserStore.getUser(id).globalName || UserStore.getUser(id).username}`,
             id: Toasts.genId()
         });
         addToWhitelist(id);
+        const { body } = await RestAPI.get({
+            url: `/users/${id}/profile`,
+            query: {
+                with_mutual_guilds: true,
+                with_mutual_friends_count: true,
+            }
+        });
+        oldUsers[id] = body;
+        logger.info(`Cached user ${id} with name ${oldUsers[id].user.globalName || oldUsers[id].user.username} for further usage.`);
     },
     unStalkuser(id: string) {
         Toasts.show({
             type: Toasts.Type.SUCCESS,
-            message: `Stopped stalking ${UserStore.getUser(id).globalName}`,
+            // @ts-ignore outdated types lib doesnt have .globalName
+            message: `Stopped stalking ${UserStore.getUser(id).globalName || UserStore.getUser(id).username}`,
             id: Toasts.genId()
         });
         removeFromWhitelist(id);
+        delete oldUsers[id];
     }
 };
 
