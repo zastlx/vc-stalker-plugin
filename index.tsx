@@ -32,6 +32,21 @@ const settings = definePluginSettings({
         type: OptionType.STRING,
         description: "Whitelisted user IDs to stalk"
     },
+    trackUserProfileChanges: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Show notification for 'user profile changed'"
+    },
+    trackStartedTyping: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Show notification for 'user started typing'"
+    },
+    trackSentMessage: {
+        default: true,
+        type: OptionType.BOOLEAN,
+        description: "Show notification for 'user sent a message'"
+    },
 });
 
 const switchToMsg = (gid: string, cid?: string, mid?: string) => {
@@ -61,7 +76,7 @@ const _plugin: PluginDef & Record<string, any> = {
     settings,
     flux: {
         MESSAGE_CREATE: (payload: MessageCreatePayload) => {
-            if (!payload.message || !payload.message.author || !payload.message.channel_id) return;
+            if (!payload.message || !payload.message.author || !payload.message.channel_id || !settings.store.trackSentMessage) return;
 
             const authorId = payload.message.author?.id;
             if (!isInWhitelist(authorId) || getCurrentChannel()?.id === payload.channelId) return;
@@ -130,7 +145,7 @@ const _plugin: PluginDef & Record<string, any> = {
             });
         },
         TYPING_START: (payload: TypingStartPayload) => {
-            if (!payload || !payload.channelId || !payload.userId) return;
+            if (!payload || !payload.channelId || !payload.userId || !settings.store.trackStartedTyping) return;
 
             const author = UserStore.getUser(payload.userId);
             if (!isInWhitelist(author?.id) || getCurrentChannel()?.id === payload.channelId) return;
@@ -145,7 +160,7 @@ const _plugin: PluginDef & Record<string, any> = {
 
         },
         USER_PROFILE_FETCH_SUCCESS: async (payload: UserUpdatePayload) => {
-            if (!payload || !payload.user || !payload.user.id || !isInWhitelist(payload.user.id)) return;
+            if (!payload || !payload.user || !payload.user.id || !isInWhitelist(payload.user.id) || !settings.store.trackUserProfileChanges) return;
 
             const oldUser = oldUsers[payload.user.id];
             if (!oldUser) {
