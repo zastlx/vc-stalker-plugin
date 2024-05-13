@@ -58,6 +58,24 @@ const switchToMsg = (gid: string, cid?: string, mid?: string) => {
     });
 };
 
+// Convert snake_case to camelCase for all keys in an object, including nested objects
+function convertSnakeCaseToCamelCase(obj: any): any {
+
+    if (!Array.isArray(obj) && (typeof obj !== 'object' || obj === null)) {
+        return obj;
+    }
+
+    if (Array.isArray(obj)) {
+        return obj.map(convertSnakeCaseToCamelCase);
+    }
+
+    return Object.keys(obj).reduce((newObj, key) => {
+        const camelCaseKey = key.replace(/_([a-z])/gi, (_, char) => char.toUpperCase());
+        const value = convertSnakeCaseToCamelCase(obj[key]);
+        return { ...newObj, [camelCaseKey]: value };
+    }, {} as any);
+}
+
 let oldUsers: {
     [id: string]: UserUpdatePayload;
 } = {};
@@ -162,26 +180,58 @@ const _plugin: PluginDef & Record<string, any> = {
         USER_PROFILE_FETCH_SUCCESS: async (payload: UserUpdatePayload) => {
             if (!payload || !payload.user || !payload.user.id || !isInWhitelist(payload.user.id) || !settings.store.trackUserProfileChanges) return;
 
-            const oldUser = oldUsers[payload.user.id];
+            // Normalize incoming data
+            payload = convertSnakeCaseToCamelCase(payload);
+
+            // Cache user information if we have not seen them before
+            var oldUser = oldUsers[payload.user.id] ? convertSnakeCaseToCamelCase(oldUsers[payload.user.id]) : null;
+
             if (!oldUser) {
                 oldUsers[payload.user.id] = payload;
                 return;
             }
 
-            // TODO: list the differences between the old and new user
-            if (payload != oldUser) {
-                Notifications.showNotification({
-                    title: `${payload.user.globalName || payload.user.username} updated their profile!`,
-                    body: "Click to view their profile.",
-                    onClick: () => {
-                        openUserProfile(payload.user.id);
-                    },
-                    icon: UserStore.getUser(payload.user.id).getAvatarURL(undefined, undefined, false)
+            // Determine which properties have changed
+            const changedKeys = (() => {
+                const keysToCompare = ['username', 'globalName', 'avatar', 'discriminator', 'clan', 'flags', 'banner', 'banner_color', 'accent_color', 'bio'];
+                let changedKeys: string[] = [];
+
+                keysToCompare.forEach(key => {
+                    const newValue = payload.user[key];
+                    const oldValue = oldUser.user[key];
+                    if (newValue !== oldValue) {
+                        changedKeys.push(key);
+                    }
                 });
-                oldUsers[payload.user.id] = payload;
+
+                return changedKeys;
+            })();
+
+            // If no properties have changed, nothing further to do
+            if (changedKeys.length === 0) {
+                return;
             }
 
+            // TODO - Log the changed value somehow.
+            // That would be too much info to show in the notification
+
+            // Send a notification showing what has changed
+            const notificationTitle = payload.user.globalName || payload.user.username;
+            const changedPropertiesList = changedKeys.join(', ');
+            const notificationBody = `Updated properties: ${changedPropertiesList}.`;
+            const avatarURL = UserStore.getUser(payload.user.id).getAvatarURL(undefined, undefined, false);
+
+            Notifications.showNotification({
+                title: `${notificationTitle} updated their profile!`,
+                body: notificationBody,
+                onClick: () => openUserProfile(payload.user.id),
+                icon: avatarURL
+            });
+
+            // Update cached user for next time
+            oldUsers[payload.user.id] = payload;
         },
+
         THREAD_CREATE: (payload: ThreadCreatePayload) => {
             if (!payload || !payload.channel || !payload.channel.id || !payload.channel.ownerId || !isInWhitelist(payload.channel.ownerId)) return;
 
