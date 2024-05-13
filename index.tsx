@@ -61,20 +61,16 @@ const switchToMsg = (gid: string, cid?: string, mid?: string) => {
 // Convert snake_case to camelCase for all keys in an object, including nested objects
 function convertSnakeCaseToCamelCase(obj: any): any {
 
-    if (!Array.isArray(obj) && (typeof obj !== 'object' || obj === null)) {
-        return obj;
-    }
+    if (!Array.isArray(obj) && (typeof obj !== "object" || obj === null)) return obj;
 
-    if (Array.isArray(obj)) {
-        return obj.map(convertSnakeCaseToCamelCase);
-    }
+    if (Array.isArray(obj)) return obj.map(convertSnakeCaseToCamelCase);
 
     return Object.keys(obj).reduce((newObj, key) => {
         const camelCaseKey = key.replace(/_([a-z])/gi, (_, char) => char.toUpperCase());
         const value = convertSnakeCaseToCamelCase(obj[key]);
         return { ...newObj, [camelCaseKey]: value };
     }, {} as any);
-}
+};
 
 let oldUsers: {
     [id: string]: UserUpdatePayload;
@@ -111,7 +107,6 @@ const _plugin: PluginDef & Record<string, any> = {
                 return;
             }
             Notifications.showNotification({
-                // @ts-ignore outdated types lib doesnt have .globalName
                 // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Sent a message`,
                 body: "Click to jump to the message",
@@ -184,7 +179,7 @@ const _plugin: PluginDef & Record<string, any> = {
             payload = convertSnakeCaseToCamelCase(payload);
 
             // Cache user information if we have not seen them before
-            var oldUser = oldUsers[payload.user.id] ? convertSnakeCaseToCamelCase(oldUsers[payload.user.id]) : null;
+            const oldUser = oldUsers[payload.user.id] ? convertSnakeCaseToCamelCase(oldUsers[payload.user.id]) : null;
 
             if (!oldUser) {
                 oldUsers[payload.user.id] = payload;
@@ -193,27 +188,20 @@ const _plugin: PluginDef & Record<string, any> = {
 
             // Determine which properties have changed
             const changedKeys = (() => {
-                const keysToCompare = ['username', 'globalName', 'avatar', 'discriminator', 'clan', 'flags', 'banner', 'banner_color', 'accent_color', 'bio'];
+                const keysToCompare = ["username", "globalName", "avatar", "discriminator", "clan", "flags", "banner", "banner_color", "accent_color", "bio"];
                 let changedKeys: string[] = [];
 
                 keysToCompare.forEach(key => {
                     const newValue = payload.user[key];
                     const oldValue = oldUser.user[key];
-                    if (newValue !== oldValue) {
-                        changedKeys.push(key);
-                    }
+                    if (newValue !== oldValue) changedKeys.push(key);
                 });
 
                 return changedKeys;
             })();
 
             // If no properties have changed, nothing further to do
-            if (changedKeys.length === 0) {
-                return;
-            }
-
-            // TODO - Log the changed value somehow.
-            // That would be too much info to show in the notification
+            if (changedKeys.length === 0) return;
 
             // Send a notification showing what has changed
             const notificationTitle = payload.user.globalName || payload.user.username;
