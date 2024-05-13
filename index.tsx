@@ -168,7 +168,7 @@ const _plugin: PluginDef & Record<string, any> = {
                 title: `${author.globalName || author.username} Started typing...`,
                 body: "Click to jump to the channel.",
                 icon: author.getAvatarURL(undefined, undefined, false),
-                onClick: () => switchToMsg(ChannelStore.getChannel(payload.channelId).guild_id, payload.channelId, "")
+                onClick: () => switchToMsg(ChannelStore.getChannel(payload.channelId).guild_id, payload.channelId)
             });
 
         },
@@ -228,7 +228,7 @@ const _plugin: PluginDef & Record<string, any> = {
                     // @ts-ignore outdated types lib doesnt have .globalName
                     title: `New thread created by ${UserStore.getUser(payload.channel.ownerId).globalName || UserStore.getUser(payload.channel.ownerId).username}`,
                     body: `Click to view the thread.`,
-                    onClick: () => switchToMsg(payload.channel.guild_id, payload.channel.parent_id, ""),
+                    onClick: () => switchToMsg(payload.channel.guild_id, payload.channel.parent_id),
                     icon: UserStore.getUser(payload.channel.ownerId).getAvatarURL(undefined, undefined, false)
                 });
             }
