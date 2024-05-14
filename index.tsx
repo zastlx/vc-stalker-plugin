@@ -5,7 +5,7 @@ import { Menu, Toasts, UserStore, MessageStore, RestAPI, ChannelStore } from "@w
 import { findByProps } from "@webpack";
 import { getCurrentChannel, openUserProfile } from "@utils/discord";
 import { Notifications } from "@api/index";
-import { Message } from "discord-types/general";
+import { Message, MessageJSON } from "discord-types/general";
 import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload, UserUpdatePayload, ThreadCreatePayload } from "./types";
 import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist } from "./utils";
 
@@ -47,7 +47,18 @@ const settings = definePluginSettings({
         type: OptionType.BOOLEAN,
         description: "Show notification for 'user sent a message'"
     },
+    showMessageBody: {
+        default: false,
+        type: OptionType.BOOLEAN,
+        description: "Include message contents in notification"
+    },
+    charLimit: {
+        default: 100,
+        type: OptionType.NUMBER,
+        description: "Character limit for notifications. Set to 0 for no limit. Default=100"
+    }
 });
+
 
 const switchToMsg = (gid: string, cid?: string, mid?: string) => {
     if (gid) findByProps("transitionToGuildSync").transitionToGuildSync(gid);
@@ -71,6 +82,19 @@ function convertSnakeCaseToCamelCase(obj: any): any {
         return { ...newObj, [camelCaseKey]: value };
     }, {} as any);
 };
+
+// Takes a payload and returns the correct message string based on settings
+function getMessageBody(settings: any, payload: MessageCreatePayload | MessageUpdatePayload): string {
+    if (!settings.store.showMessageBody) return "Click to jump to the message";
+
+    const { charLimit } = settings.store;
+    const { content, attachments } = payload.message;
+    const baseContent = content || attachments?.[0]?.filename || "Click to jump to the message";
+
+    return (charLimit > 0 && baseContent.length > charLimit)
+        ? `${baseContent.substring(0, charLimit)}...`
+        : baseContent;
+}
 
 let oldUsers: {
     [id: string]: UserUpdatePayload;
@@ -109,7 +133,7 @@ const _plugin: PluginDef & Record<string, any> = {
             Notifications.showNotification({
                 // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Sent a message`,
-                body: "Click to jump to the message",
+                body: getMessageBody(settings, payload),
                 onClick: () => switchToMsg(payload.guildId, payload.channelId, payload.message.id),
                 icon: author.getAvatarURL(undefined, undefined, false)
             });
@@ -124,7 +148,7 @@ const _plugin: PluginDef & Record<string, any> = {
             Notifications.showNotification({
                 // @ts-ignore outdated types lib doesnt have .globalName
                 title: `${author.globalName || author.username} Edited a message`,
-                body: "Click to jump to the message",
+                body: getMessageBody(settings, payload),
                 onClick: () => switchToMsg(payload.guildId, payload.message.channel_id, payload.message.id),
                 icon: author.getAvatarURL(undefined, undefined, false)
             });
