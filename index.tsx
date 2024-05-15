@@ -7,7 +7,7 @@ import { getCurrentChannel, openUserProfile } from "@utils/discord";
 import { Notifications } from "@api/index";
 import { Message } from "discord-types/general";
 import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload, UserUpdatePayload, ThreadCreatePayload } from "./types";
-import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist } from "./utils";
+import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist, convertSnakeCaseToCamelCase } from "./utils";
 
 async function importLoggedMessages() {
     let module;
@@ -67,20 +67,6 @@ const switchToMsg = (gid: string, cid?: string, mid?: string) => {
         channelId: cid,
         messageId: mid
     });
-};
-
-// Convert snake_case to camelCase for all keys in an object, including nested objects
-function convertSnakeCaseToCamelCase(obj: any): any {
-
-    if (!Array.isArray(obj) && (typeof obj !== "object" || obj === null)) return obj;
-
-    if (Array.isArray(obj)) return obj.map(convertSnakeCaseToCamelCase);
-
-    return Object.keys(obj).reduce((newObj, key) => {
-        const camelCaseKey = key.replace(/_([a-z])/gi, (_, char) => char.toUpperCase());
-        const value = convertSnakeCaseToCamelCase(obj[key]);
-        return { ...newObj, [camelCaseKey]: value };
-    }, {} as any);
 };
 
 // Takes a payload and returns the correct message string based on settings
