@@ -5,10 +5,9 @@ import { Menu, Toasts, UserStore, MessageStore, RestAPI, ChannelStore } from "@w
 import { findByProps } from "@webpack";
 import { getCurrentChannel, openUserProfile } from "@utils/discord";
 import { Notifications } from "@api/index";
-import { Message, MessageJSON } from "discord-types/general";
+import { Message } from "discord-types/general";
 import { MessageCreatePayload, MessageUpdatePayload, MessageDeletePayload, TypingStartPayload, UserUpdatePayload, ThreadCreatePayload } from "./types";
 import { addToWhitelist, isInWhitelist, logger, removeFromWhitelist } from "./utils";
-import { snakeCase } from "lodash";
 
 async function importLoggedMessages() {
     let module;
@@ -257,23 +256,7 @@ const _plugin: PluginDef & Record<string, any> = {
                     icon: UserStore.getUser(payload.channel.ownerId).getAvatarURL(undefined, undefined, false)
                 });
             }
-        },/*
-        PRESENCE_UPDATES: payload => {
-            // Handle PRESENCE_UPDATES event
-            console.log("PRESENCE_UPDATES event received:", payload);
-        },/*
-        GUILD_MEMBER_ADD: payload => {
-            // Handle GUILD_MEMBER_ADD event
-            console.log("GUILD_MEMBER_ADD event received:", payload);
         },
-        CALL_UPDATE: payload => {
-            // Handle CALL_UPDATE event
-            console.log("CALL_UPDATE event received:", payload);
-        },
-        RELATIONSHIP_UPDATE: payload => {
-            // Handle RELATIONSHIP_UPDATE event
-            console.log("RELATIONSHIP_UPDATE event received:", payload);
-        },*/
     },
     async start() {
         if (!Vencord.Plugins.plugins["MessageLoggerEnhanced"]) {
