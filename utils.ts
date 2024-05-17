@@ -24,6 +24,20 @@ export function isInWhitelist(id: string) {
     return items.indexOf(id) !== -1;
 }
 
+// Convert snake_case to camelCase for all keys in an object, including nested objects
+export function convertSnakeCaseToCamelCase(obj: any): any {
+
+    if (!Array.isArray(obj) && (typeof obj !== "object" || obj === null)) return obj;
+
+    if (Array.isArray(obj)) return obj.map(convertSnakeCaseToCamelCase);
+
+    return Object.keys(obj).reduce((newObj, key) => {
+        const camelCaseKey = key.replace(/_([a-z])/gi, (_, char) => char.toUpperCase());
+        const value = convertSnakeCaseToCamelCase(obj[key]);
+        return { ...newObj, [camelCaseKey]: value };
+    }, {} as any);
+};
+
 const logger = new Logger("Stalker");
 
 export { logger };
